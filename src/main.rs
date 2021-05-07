@@ -1,9 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
-
-use nalgebra as na;
-use na::{Vector3};
+use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
@@ -11,23 +8,39 @@ use sdl2;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
+use clap::{App, load_yaml};
+
 mod render;
 mod env;
 
 use env::EuclidianRaytracing;
 
-// Screen size
-const SIZE: u32 = 100;
-const SCREEN: [u32;2] = [SIZE, SIZE];
-const ASPECT: f64 = SCREEN[0] as f64 / SCREEN[1] as f64;
-
-const SCALE: u32 = 4;
-
 fn main() {
+    // == Deal with CLI arguments ==
+    let args_file = load_yaml!("args.yaml");
+    let matches = App::from_yaml(args_file).get_matches();
+
+    // Screen
+    let scale: u32 = matches.value_of("scale").unwrap_or("1").parse().unwrap();
+    
+    let screen_raw = matches.value_of("screen").unwrap_or("400");
+    let screen: [u32;2] = match screen_raw.parse::<u32>() {
+        Ok(screen) => [screen, screen],
+        Err(_) => {
+            let screen = &screen_raw.split("x").map(|x| {
+                x.parse::<u32>().unwrap()
+            }).collect::<Vec<u32>>()[..2];
+            [screen[0], screen[1]]
+        }
+    };
+
+    let aspect = screen[0] as f64 / screen[1] as f64;
+
+    // SDL2 stuff
     let sdl = sdl2::init().unwrap();
     let video = sdl.video().unwrap();
     let window = video
-        .window("TEST", SCALE*SCREEN[0], SCALE*SCREEN[1])
+        .window("TEST", scale*screen[0], scale*screen[1])
         .build()
         .unwrap();
 
@@ -42,20 +55,21 @@ fn main() {
 
     // Camera
     let camera = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-            (2.0, std::f64::consts::FRAC_PI_2, 0.0), ASPECT));
+            (2.0, std::f64::consts::FRAC_PI_2, 0.0), aspect));
 
     // Synchronization
     let a_ended = Arc::new(Mutex::new(false));
     let a_ended_thread = a_ended.clone();
 
     // Pixels 
-    let a_pixels = Arc::new(Mutex::new(vec![Color::RGB(0xff, 0xff, 0xff);(SCREEN[0]*SCREEN[1]) as usize]));
+    let a_pixels = Arc::new(Mutex::new(vec![Color::RGB(0xff, 0xff, 0xff);(screen[0]*screen[1]) as usize]));
    
     let a_pixels_thread = a_pixels.clone();
 
     // Render thread
     let render_thread = thread::spawn(move || {
-        (0..SCREEN[0]*SCREEN[1]).into_par_iter().for_each(|ii| {
+        let t0 = Instant::now();
+        (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
             // Check if quit
             {
                 let ended_thread = a_ended_thread.lock().unwrap();
@@ -64,14 +78,15 @@ fn main() {
                 }
             }
 
-            let i = ii / SCREEN[0];
-            let j = ii % SCREEN[0];
-            let pixel_color = camera.render_pixel(j, i, SCREEN);
+            let i = ii / screen[0];
+            let j = ii % screen[0];
+            let pixel_color = camera.render_pixel(j, i, screen);
             {
                 let mut pixels = a_pixels_thread.lock().unwrap();
-                pixels[(i*SCREEN[0] + j) as usize] = pixel_color;
+                pixels[(i*screen[0] + j) as usize] = pixel_color;
             }
         });
+        println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
     });
 
     // Main loop
@@ -92,11 +107,11 @@ fn main() {
             let pixels = a_pixels.lock().unwrap();
             for ii in 0..pixels.len() {
                 let ii = ii as u32;
-                let i = (ii / SCREEN[0]) * SCALE;
-                let j = (ii % SCREEN[0]) * SCALE;
+                let i = (ii / screen[0]) * scale;
+                let j = (ii % screen[0]) * scale;
                 
                 canvas.set_draw_color(pixels[ii as usize]);
-                canvas.fill_rect(Rect::new(j as i32, i as i32, SCALE, SCALE)).unwrap();
+                canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
             }
 
         }
