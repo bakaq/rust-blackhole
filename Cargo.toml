@@ -8,8 +8,7 @@ edition = "2018"
 
 [dependencies]
 rayon = "1.5"
-ndarray = "0.14"
-ndarray-linalg = {version = "0.13.1", features = ["openblas-system"]}
+nalgebra = "0.26.2"
 
 [dependencies.sdl2]
 version = "0.34.5"
