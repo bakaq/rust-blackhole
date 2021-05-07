@@ -1,0 +1,16 @@
+[package]
+name = "rust-blackhole"
+version = "0.1.0"
+authors = ["kaue <kaue.bazilli@usp.br>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rayon = "1.5"
+ndarray = "0.14"
+ndarray-linalg = {version = "0.13.1", features = ["openblas-system"]}
+
+[dependencies.sdl2]
+version = "0.34.5"
+features = ["static-link","use-pkgconfig"]
