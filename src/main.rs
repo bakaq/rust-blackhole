@@ -13,7 +13,42 @@ use clap::{App, load_yaml};
 mod render;
 mod env;
 
-use env::EuclidianRaytracing;
+use env::{Environment, EuclidianRaytracing};
+
+fn render_frame<T: 'static>(screen: [u32;2], camera: render::Camera<T>,
+                a_ended_thread: Arc<Mutex<bool>>,
+                a_pixels_thread: Arc<Mutex<Vec<Color>>>)
+                -> thread::JoinHandle<()>
+    where T: Environment + Send + Sync
+{
+    thread::spawn(move || {
+        let t0 = Instant::now();
+        (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
+            // Check if quit
+            {
+                let ended_thread = a_ended_thread.lock().unwrap();
+                if *ended_thread {
+                    return;
+                }
+            }
+
+            let i = ii / screen[0];
+            let j = ii % screen[0];
+            let pixel_color = camera.render_pixel(j, i, screen);
+            {
+                let mut pixels = a_pixels_thread.lock().unwrap();
+                pixels[(i*screen[0] + j) as usize] = pixel_color;
+            }
+        });
+
+        {
+            let mut ended_thread = a_ended_thread.lock().unwrap();
+            *ended_thread = true;
+        }
+
+        println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
+    })
+}
 
 fn main() {
     // == Deal with CLI arguments ==
@@ -36,6 +71,8 @@ fn main() {
 
     let aspect = screen[0] as f64 / screen[1] as f64;
 
+    let spinning: f64 = matches.value_of("spinning").unwrap_or("0").parse().unwrap();
+
     // SDL2 stuff
     let sdl = sdl2::init().unwrap();
     let video = sdl.video().unwrap();
@@ -54,41 +91,21 @@ fn main() {
     canvas.present();
 
     // Camera
+    let mut phi = 0.0;
     let camera = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-            (2.0, std::f64::consts::FRAC_PI_2, 0.0), aspect));
+            (2.0, std::f64::consts::FRAC_PI_2, phi), aspect));
 
     // Synchronization
     let a_ended = Arc::new(Mutex::new(false));
-    let a_ended_thread = a_ended.clone();
 
     // Pixels 
     let a_pixels = Arc::new(Mutex::new(vec![Color::RGB(0xff, 0xff, 0xff);(screen[0]*screen[1]) as usize]));
-   
-    let a_pixels_thread = a_pixels.clone();
 
     // Render thread
-    let render_thread = thread::spawn(move || {
-        let t0 = Instant::now();
-        (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
-            // Check if quit
-            {
-                let ended_thread = a_ended_thread.lock().unwrap();
-                if *ended_thread {
-                    return;
-                }
-            }
+    let mut render_thread;
 
-            let i = ii / screen[0];
-            let j = ii % screen[0];
-            let pixel_color = camera.render_pixel(j, i, screen);
-            {
-                let mut pixels = a_pixels_thread.lock().unwrap();
-                pixels[(i*screen[0] + j) as usize] = pixel_color;
-            }
-        });
-        println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
-    });
-
+    render_thread = render_frame(screen, camera, a_ended.clone(), a_pixels.clone());
+    
     // Main loop
     let mut event_pump = sdl.event_pump().unwrap();
     'main: loop {
@@ -114,6 +131,17 @@ fn main() {
                 canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
             }
 
+        }
+        
+        if spinning != 0.0 {
+            let mut ended = a_ended.lock().unwrap();
+            if *ended {
+                phi += spinning;
+                let camera_new = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
+                    (2.0, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect));
+                render_thread = render_frame(screen, camera_new, a_ended.clone(), a_pixels.clone());
+                *ended = false;
+            }
         }
 
         canvas.present();

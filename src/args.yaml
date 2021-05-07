@@ -14,3 +14,8 @@ args:
         value_name: SCALE
         help: "Sets the size of each pixel (Default: 1)"
         takes_value: true
+    - spinning:
+        long: spinning
+        value_name: DPHI
+        help: "Sets the spin velocity (Default: 0)"
+        takes_value: true
