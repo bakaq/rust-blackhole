@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use ndarray::prelude::*;
+use nalgebra as na;
+use na::{Vector3};
 
 use rayon::prelude::*;
 
@@ -16,9 +17,11 @@ mod env;
 use env::EuclidianRaytracing;
 
 // Screen size
-const SIZE: u32 = 32;
+const SIZE: u32 = 100;
 const SCREEN: [u32;2] = [SIZE, SIZE];
-const SCALE: u32 = 16;
+const ASPECT: f64 = SCREEN[0] as f64 / SCREEN[1] as f64;
+
+const SCALE: u32 = 4;
 
 fn main() {
     let sdl = sdl2::init().unwrap();
@@ -38,9 +41,8 @@ fn main() {
     canvas.present();
 
     // Camera
-    let camera = render::Camera::new(
-        EuclidianRaytracing::new(array![0.0,0.0,0.0], array![0.0,0.0,-1.0]),
-    );
+    let camera = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
+            (2.0, std::f64::consts::FRAC_PI_2, 0.0), ASPECT));
 
     // Synchronization
     let a_ended = Arc::new(Mutex::new(false));
