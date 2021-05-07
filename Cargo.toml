@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 rayon = "1.5"
 nalgebra = "0.26.2"
+clap = {version="2.33.3", features=["yaml"]}
+
 
 [dependencies.sdl2]
 version = "0.34.5"

@@ -90,9 +90,6 @@ impl Environment for EuclidianRaytracing {
         let dv = &self.up * (canvas_y * ys/2.0) + self.dir.cross(&self.up) * (canvas_x * ys * self.aspect/2.0);
         let pixel_pos = &canvas_orig + &dv;
         let dir = (&pixel_pos - &self.pos).normalize();
-        
-        println!("{}", self.dir);
-
 
         // Check if hit
         let mut hit = false;
