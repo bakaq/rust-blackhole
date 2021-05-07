@@ -1,6 +1,3 @@
-use std::thread;
-use std::time::Duration;
-
 use sdl2::pixels::Color;
 
 use nalgebra as na;
@@ -9,29 +6,6 @@ use na::{Vector3, Rotation3};
 
 pub trait Environment {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
-}
-
-pub struct CircleEnv ();
-
-impl CircleEnv {
-    #[allow(dead_code)]
-    pub fn new() -> CircleEnv {
-        CircleEnv()
-    }
-}
-
-impl Environment for CircleEnv {
-    fn raytrace(&self, canvas_pos: (f64,f64)) -> Color {
-        let r = (canvas_pos.0.powf(2.0) + canvas_pos.1.powf(2.0)).sqrt();
-        
-        thread::sleep(Duration::new(0, 1e5 as u32));
-
-        if r < 1.0 {
-            Color::RGB(0x00, 0x00, 0x00)
-        } else {
-            Color::RGB(0xFF, 0xFF, 0xFF)
-        }
-    }
 }
 
 pub struct EuclidianRaytracing {
@@ -55,7 +29,7 @@ impl EuclidianRaytracing {
         EuclidianRaytracing::new(
             pos,
             -pos,
-            *Vector3::y_axis(),
+            *Vector3::z_axis(),
             0.1,
             std::f64::consts::PI/3.0,
             aspect,
@@ -70,9 +44,11 @@ impl EuclidianRaytracing {
         );
  
         // Make it intuitive (from the y axis instead of the z axis)
+        /*
         let pos = Rotation3::from_axis_angle(&Vector3::x_axis(), -std::f64::consts::FRAC_PI_2)
             * Rotation3::from_axis_angle(&Vector3::z_axis(), -std::f64::consts::FRAC_PI_2)
             * pos;
+        */
 
         EuclidianRaytracing::new_orbiting(pos, aspect)
     }
@@ -107,8 +83,7 @@ impl Environment for EuclidianRaytracing {
             let hit_point = closest - (r.powf(2.0) - r_c2).sqrt()*&dir;
             let normal = (&hit_point - &sphere_pos).normalize();
             
-            let light = Vector3::new(1.0, -1.5, -1.5).normalize();
-
+            let light = Vector3::new(-1.5, 1.5, -1.5).normalize();
 
             let intensity_raw = -normal.dot(&light);
             let intensity = if intensity_raw < 0.0 {
@@ -130,11 +105,13 @@ impl Environment for EuclidianRaytracing {
             if phi < 0.0 {
                 phi += std::f64::consts::TAU;
             }    
-
-            let r = (phi/std::f64::consts::TAU * 255.0) as u8;
-            let g = (theta/std::f64::consts::PI * 255.0) as u8;
-            let b = 0x80;
-            Color::RGB(r, g, b)
+            
+            if ((phi / std::f64::consts::TAU * 100.0).fract() < 0.25)
+             || ((theta / std::f64::consts::PI * 50.0).fract() < 0.25) {
+                Color::RGB(0xff, 0x00, 0x00)
+            } else {
+                Color::RGB(0x00, 0x00, 0xff)
+            }
         }
     }
 }

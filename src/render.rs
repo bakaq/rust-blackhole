@@ -1,20 +1,11 @@
 use sdl2::pixels::Color;
 
-use crate::env::{Environment, CircleEnv};
+use crate::env::Environment;
 
 pub struct Camera<T> where
     T: Environment
 {
     env: T,
-}
-
-impl Camera<CircleEnv> {
-    #[allow(dead_code)]
-    pub fn new_default() -> Camera<CircleEnv> {
-        Camera{
-            env: CircleEnv::new(),
-        }
-    }
 }
 
 impl<T> Camera<T> where
