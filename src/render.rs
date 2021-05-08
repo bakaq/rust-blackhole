@@ -63,7 +63,6 @@ impl<T> Renderer<T> for RayonRenderer<T> where
     T: Environment
 {
     fn start_render(&mut self) {
-        println!("Start render!");
         self.stop_render();
 
         {
