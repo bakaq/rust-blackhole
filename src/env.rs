@@ -9,6 +9,20 @@ use na::Vector3;
 
 pub trait Environment: Clone + Send + Sync + 'static {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
+    
+    fn render_pixel(&self, x: u32, y: u32, screen: [u32; 2]) -> Color {
+        let x = x as f64 + 0.5;
+        let y = y as f64 + 0.5;
+
+        let sw = screen[0] as f64;
+        let sh = screen[1] as f64;
+
+        let x = (x - sw/2.0)/(sw/2.0);
+        let y = (sh/2.0 - y)/(sh/2.0);
+       
+        self.raytrace((x,y))
+    }
+
 }
 
 #[derive(Clone)]
