@@ -15,7 +15,6 @@ impl<T> Camera<T> where
         Camera{env}
     }
 
-
     pub fn render_pixel(&self, x: u32, y: u32, size: [u32; 2]) -> Color {
         let x = x as f64 + 0.5;
         let y = y as f64 + 0.5;

@@ -2,53 +2,23 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+
+use clap::{App, load_yaml};
+
+use image;
+
 use rayon::prelude::*;
 
 use sdl2;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
-use clap::{App, load_yaml};
 
 mod render;
 mod env;
 
 use env::{Environment, EuclidianRaytracing};
 
-fn render_frame<T: 'static>(screen: [u32;2], camera: render::Camera<T>,
-                a_ended_thread: Arc<Mutex<bool>>,
-                a_pixels_thread: Arc<Mutex<Vec<Color>>>)
-                -> thread::JoinHandle<()>
-    where T: Environment + Send + Sync
-{
-    thread::spawn(move || {
-        let t0 = Instant::now();
-        (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
-            // Check if quit
-            {
-                let ended_thread = a_ended_thread.lock().unwrap();
-                if *ended_thread {
-                    return;
-                }
-            }
-
-            let i = ii / screen[0];
-            let j = ii % screen[0];
-            let pixel_color = camera.render_pixel(j, i, screen);
-            {
-                let mut pixels = a_pixels_thread.lock().unwrap();
-                pixels[(i*screen[0] + j) as usize] = pixel_color;
-            }
-        });
-
-        {
-            let mut ended_thread = a_ended_thread.lock().unwrap();
-            *ended_thread = true;
-        }
-
-        println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
-    })
-}
 
 fn main() {
     // == Deal with CLI arguments ==
@@ -72,6 +42,18 @@ fn main() {
     let aspect = screen[0] as f64 / screen[1] as f64;
 
     let spinning: f64 = matches.value_of("spinning").unwrap_or("0").parse().unwrap();
+    
+    let skydome = match matches.value_of("skydome") {
+        Some(path) => {
+            match image::open(path) {
+                Ok(image) => {
+                    Some(Box::new(image.into_rgb8()))
+                },
+                Err(_) => None,
+            }
+        },
+        None => None,
+    };
 
     // SDL2 stuff
     let sdl = sdl2::init().unwrap();
@@ -93,7 +75,7 @@ fn main() {
     // Camera
     let mut phi = 0.0;
     let camera = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-            (2.0, std::f64::consts::FRAC_PI_2, phi), aspect));
+            (2.0, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone()));
 
     // Synchronization
     let a_ended = Arc::new(Mutex::new(false));
@@ -138,7 +120,7 @@ fn main() {
             if *ended {
                 phi += spinning;
                 let camera_new = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-                    (2.0, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect));
+                    (2.0, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone()));
                 render_thread = render_frame(screen, camera_new, a_ended.clone(), a_pixels.clone());
                 *ended = false;
             }
@@ -155,4 +137,39 @@ fn main() {
         *ended = true;
     }
     render_thread.join().unwrap();
+}
+
+fn render_frame<T: 'static>(screen: [u32;2], camera: render::Camera<T>,
+                a_ended_thread: Arc<Mutex<bool>>,
+                a_pixels_thread: Arc<Mutex<Vec<Color>>>)
+                -> thread::JoinHandle<()>
+    where T: Environment + Send + Sync
+{
+    thread::spawn(move || {
+        let t0 = Instant::now();
+        (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
+            // Check if quit
+            {
+                let ended_thread = a_ended_thread.lock().unwrap();
+                if *ended_thread {
+                    return;
+                }
+            }
+
+            let i = ii / screen[0];
+            let j = ii % screen[0];
+            let pixel_color = camera.render_pixel(j, i, screen);
+            {
+                let mut pixels = a_pixels_thread.lock().unwrap();
+                pixels[(i*screen[0] + j) as usize] = pixel_color;
+            }
+        });
+
+        {
+            let mut ended_thread = a_ended_thread.lock().unwrap();
+            *ended_thread = true;
+        }
+
+        println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
+    })
 }
