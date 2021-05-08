@@ -19,3 +19,8 @@ args:
         value_name: DPHI
         help: "Sets the spin velocity (Default: 0)"
         takes_value: true
+    - skydome:
+        long: skydome
+        value_name: PATH
+        help: "Sets the path to the skydome"
+        takes_value: true

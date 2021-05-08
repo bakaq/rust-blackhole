@@ -1,5 +1,8 @@
 use sdl2::pixels::Color;
 
+use image;
+use image::Pixel;
+
 use nalgebra as na;
 use na::{Vector3, Rotation3};
 
@@ -15,17 +18,18 @@ pub struct EuclidianRaytracing {
     up: Vector3<f64>,
     near: f64,
     fovy: f64,
-    aspect: f64 // x/y
+    aspect: f64, // x/y
+    skydome: Option<Box<image::RgbImage>>,
 }
 
 impl EuclidianRaytracing {
-    pub fn new(pos: Vector3<f64>, dir: Vector3<f64>, up:Vector3<f64>, near: f64, fovy: f64, aspect: f64) -> EuclidianRaytracing {
+    pub fn new(pos: Vector3<f64>, dir: Vector3<f64>, up:Vector3<f64>, near: f64, fovy: f64, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> EuclidianRaytracing {
         let up = (dir.cross(&up)).cross(&dir).normalize();
         let dir = dir.normalize();
-        EuclidianRaytracing {pos, dir, up, near, fovy, aspect}
+        EuclidianRaytracing {pos, dir, up, near, fovy, aspect, skydome}
     }
 
-    pub fn new_orbiting(pos: Vector3<f64>, aspect: f64) -> EuclidianRaytracing {
+    pub fn new_orbiting(pos: Vector3<f64>, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> EuclidianRaytracing {
         EuclidianRaytracing::new(
             pos,
             -pos,
@@ -33,24 +37,18 @@ impl EuclidianRaytracing {
             0.1,
             std::f64::consts::PI/3.0,
             aspect,
+            skydome,
         )
     }
 
-    pub fn new_orbiting_spherical((r, theta, phi): (f64, f64, f64), aspect: f64) -> EuclidianRaytracing{
+    pub fn new_orbiting_spherical((r, theta, phi): (f64, f64, f64), aspect: f64, skydome: Option<Box<image::RgbImage>>) -> EuclidianRaytracing{
         let pos = Vector3::new(
             r * theta.sin() * phi.cos(),
             r * theta.sin() * phi.sin(),
             r * theta.cos(),
         );
- 
-        // Make it intuitive (from the y axis instead of the z axis)
-        /*
-        let pos = Rotation3::from_axis_angle(&Vector3::x_axis(), -std::f64::consts::FRAC_PI_2)
-            * Rotation3::from_axis_angle(&Vector3::z_axis(), -std::f64::consts::FRAC_PI_2)
-            * pos;
-        */
-
-        EuclidianRaytracing::new_orbiting(pos, aspect)
+        
+        EuclidianRaytracing::new_orbiting(pos, aspect, skydome)
     }
 }
 
@@ -106,11 +104,24 @@ impl Environment for EuclidianRaytracing {
                 phi += std::f64::consts::TAU;
             }    
             
-            if ((phi / std::f64::consts::TAU * 100.0).fract() < 0.25)
-             || ((theta / std::f64::consts::PI * 50.0).fract() < 0.25) {
-                Color::RGB(0xff, 0x00, 0x00)
-            } else {
-                Color::RGB(0x00, 0x00, 0xff)
+            match &self.skydome {
+                Some(skydome) => {
+                    let (w, h) = skydome.dimensions();
+                    
+                    let x = (phi / std::f64::consts::TAU * (w as f64)) as u32;
+                    let y = (theta / std::f64::consts::PI * (h as f64)) as u32;
+
+                    let pixel = skydome.get_pixel(x, y).channels();
+                    Color::RGB(pixel[0], pixel[1], pixel[2])
+                },
+                None => {
+                    if ((phi / std::f64::consts::TAU * 100.0).fract() < 0.25)
+                     || ((theta / std::f64::consts::PI * 50.0).fract() < 0.25) {
+                        Color::RGB(0xff, 0x00, 0x00)
+                    } else {
+                        Color::RGB(0x00, 0x00, 0xff)
+                    }
+                },
             }
         }
     }
