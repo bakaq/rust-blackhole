@@ -4,16 +4,16 @@ use image;
 use image::Pixel;
 
 use nalgebra as na;
-use na::{Vector3, Rotation3};
+use na::Vector3;
 
 
-pub trait Environment {
+pub trait Environment: Clone + Send + Sync + 'static {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
 }
 
+#[derive(Clone)]
 pub struct EuclidianRaytracing {
     pos: Vector3<f64>,
-    #[allow(dead_code)]
     dir: Vector3<f64>,
     up: Vector3<f64>,
     near: f64,
@@ -35,7 +35,7 @@ impl EuclidianRaytracing {
             -pos,
             *Vector3::z_axis(),
             0.1,
-            std::f64::consts::PI/3.0,
+            std::f64::consts::PI/2.0,
             aspect,
             skydome,
         )
@@ -59,7 +59,7 @@ impl Environment for EuclidianRaytracing {
         let r: f64 = 1.0;
 
         // Find direction
-        let ys = self.fovy.tan() * self.near;
+        let ys = (self.fovy/2.0).tan() * self.near;
         let canvas_orig = &self.pos + self.near * &self.dir;
         let dv = &self.up * (canvas_y * ys/2.0) + self.dir.cross(&self.up) * (canvas_x * ys * self.aspect/2.0);
         let pixel_pos = &canvas_orig + &dv;
