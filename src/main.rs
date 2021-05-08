@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration};
 
@@ -14,6 +13,7 @@ use sdl2::rect::Rect;
 mod render;
 mod env;
 
+use render::Renderer;
 use env::{EuclidianRaytracing};
 
 
@@ -70,20 +70,14 @@ fn main() {
     canvas.clear();
     canvas.present();
 
-    // Camera
+    // Environment
     let r = 4.0;
     let mut phi = 0.0;
-    let camera = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-            (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone()));
-
-    // Synchronization
-    let a_running = Arc::new(Mutex::new(false));
-
-    // Pixels 
-    let a_pixels = Arc::new(Mutex::new(vec![Color::RGB(0xff, 0xff, 0xff);(screen[0]*screen[1]) as usize]));
+    let env = EuclidianRaytracing::new_orbiting_spherical(
+            (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone());
 
     // Renderer
-    let mut renderer = render::Renderer::new(screen, camera, a_pixels.clone(), a_running.clone());
+    let mut renderer = render::RayonRenderer::new(screen, env);
     renderer.start_render();
 
     // Main loop
@@ -100,116 +94,24 @@ fn main() {
         canvas.clear();
         
         // Rendering
-        {
-            let pixels = a_pixels.lock().unwrap();
-            for ii in 0..pixels.len() {
-                let ii = ii as u32;
-                let i = (ii / screen[0]) * scale;
-                let j = (ii % screen[0]) * scale;
-                
-                canvas.set_draw_color(pixels[ii as usize]);
-                canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
-            }
-
+        let pixels = renderer.get_pixels();
+        for ii in 0..pixels.len() {
+            let ii = ii as u32;
+            let i = (ii / screen[0]) * scale;
+            let j = (ii % screen[0]) * scale;
+            
+            canvas.set_draw_color(pixels[ii as usize]);
+            canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
         }
-        
-        if spinning != 0.0 {
-            let running = {
-                let running = a_running.lock().unwrap();
-                *running
-            };
-            if !running {
-                phi += spinning;
-                let camera_new = render::Camera::new(EuclidianRaytracing::new_orbiting_spherical(
-                    (r, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone()));
-                renderer.camera = camera_new;
-                renderer.start_render()
-            }
+   
+        if spinning != 0.0 && renderer.is_ready() {
+            phi += spinning;
+            renderer.env = EuclidianRaytracing::new_orbiting_spherical(
+                (r, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone());
+            renderer.start_render()
         }
 
         canvas.present();
         thread::sleep(Duration::new(0, (1e9 as u32) / 60));
     }
 }
-
-/*
-struct Renderer<T> where
-    T: Environment
-{
-    screen: [u32; 2],
-    camera: render::Camera<T>,
-    pixels: Arc<Mutex<Vec<Color>>>,
-    running: Arc<Mutex<bool>>,
-    render_thread: Option<thread::JoinHandle<()>>,
-}
-
-impl<T> Renderer<T> where
-    T: Environment
-{
-    fn new(screen: [u32;2], camera: render::Camera<T>, pixels: Arc<Mutex<Vec<Color>>>, running: Arc<Mutex<bool>>) -> Renderer<T> {
-        let render_thread = None;
-        Renderer {screen, camera, pixels, running, render_thread}
-    }
-
-    fn start_render(&mut self) {
-        println!("Start render!");
-        self.stop_render();
-
-        let a_running = self.running.clone();
-        let a_pixels = self.pixels.clone();
-        let screen = self.screen.clone(); 
-        let camera = self.camera.clone();
-
-        self.render_thread = Some(thread::spawn(move || {
-            let t0 = Instant::now();
-            (0..screen[0]*screen[1]).into_par_iter().for_each(|ii| {
-                // Check if quit
-                {
-                    let running = a_running.lock().unwrap();
-                    if !*running {
-                        return;
-                    }
-                }
-
-                let i = ii / screen[0];
-                let j = ii % screen[0];
-                let pixel_color = camera.render_pixel(j, i, screen);
-                {
-                    let mut pixels = a_pixels.lock().unwrap();
-                    pixels[(i*screen[0] + j) as usize] = pixel_color;
-                }
-            });
-
-            {
-                let mut running = a_running.lock().unwrap();
-                *running = false;
-            }
-
-            println!("Finished rendering in {}s", t0.elapsed().as_nanos() as f64 / 1e9 );
-        }));
-        
-        {
-            let mut running = self.running.lock().unwrap();
-            *running = true;
-        }
-    }
-
-    fn stop_render(&mut self) {
-        if let Some(join_handle) = self.render_thread.take() {
-            {
-                let mut running = self.running.lock().unwrap();
-                *running = false;
-            }
-            join_handle.join().unwrap();
-        } 
-    }
-}
-
-impl<T> Drop for Renderer<T> where
-    T: Environment
-{
-    fn drop(&mut self) {
-        self.stop_render();
-    }
-}
-*/
