@@ -37,7 +37,8 @@ fn main() {
     };
 
     let aspect = screen[0] as f64 / screen[1] as f64;
-    
+    println!("{}", aspect);
+
     // Parameters
     let spinning: f64 = matches.value_of("spinning").unwrap_or("0").parse().unwrap();
     
@@ -71,7 +72,7 @@ fn main() {
     canvas.present();
 
     // Environment
-    let r = 4.0;
+    let r = 10.0;
     let mut phi = 0.0;
     let env = EuclidianRaytracing::new_orbiting_spherical(
             (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone());
@@ -106,8 +107,11 @@ fn main() {
    
         if spinning != 0.0 && renderer.is_ready() {
             phi += spinning;
-            renderer.env = EuclidianRaytracing::new_orbiting_spherical(
-                (r, (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone());
+            renderer.env.set_pos_orbiting((
+                r,
+                (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2,
+                phi,
+            ));
             renderer.start_render()
         }
 
