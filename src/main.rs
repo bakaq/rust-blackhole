@@ -12,6 +12,7 @@ use sdl2::rect::Rect;
 
 mod render;
 mod env;
+mod physics;
 
 use render::Renderer;
 use env::{EuclidianRaytracing};
