@@ -6,6 +6,8 @@ use image::Pixel;
 use nalgebra as na;
 use na::{Vector3, Unit};
 
+use crate::physics;
+
 pub trait Environment: Clone + Send + Sync + 'static {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
     
@@ -135,6 +137,8 @@ impl Environment for EuclidianRaytracing {
             match thing {
                 0 => Color::RGB(0x00, 0x00, 0x00), // Blackhole
                 1 => {
+                    physics::get_accretion_disk_color((inter_point.norm(), 0.0, 0.0))
+                    /*
                     let mut phi = inter_point.y.atan2(inter_point.x);
                     if phi < 0.0 {
                         phi += std::f64::consts::TAU;
@@ -145,6 +149,7 @@ impl Environment for EuclidianRaytracing {
                     } else {
                         Color::RGB(0x00, 0x00, 0xff)
                     }
+                    */
                 }, // Accretion disk
                 _ => Color::RGB(0xff, 0xff, 0xff),
             }
