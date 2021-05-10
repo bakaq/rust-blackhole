@@ -3,6 +3,9 @@ use sdl2::pixels::Color;
 use nalgebra as na;
 use na::{Vector4};
 
+#[cfg(test)]
+mod tests;
+
 pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
     if mu != nu {
         |pos: &Vector4<f64>| {
@@ -26,7 +29,7 @@ pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
     }
 }
 
-pub fn gamma(mu: usize, nu: usize, lambda: usize) -> impl Fn(&Vector4<f64>) -> f64 {
+pub fn gamma(lambda: usize, mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
     // Symetry
     let (mu, nu) = if mu > nu {
         (nu, mu)

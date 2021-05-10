@@ -15,3 +15,6 @@ image = "0.23.14"
 [dependencies.sdl2]
 version = "0.34.5"
 features = ["static-link","use-pkgconfig"]
+
+[dev-dependencies]
+rand = "0.8.3"
