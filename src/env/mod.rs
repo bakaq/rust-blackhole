@@ -9,6 +9,8 @@ use na::{Vector3, Vector4, Unit};
 use crate::physics;
 use physics::{g, gamma};
 
+mod tests;
+
 pub trait Environment: Clone + Send + Sync + 'static {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
     
@@ -290,6 +292,18 @@ impl Environment for SchwarzschildRaytracing {
 
         // Find time component
         let time_norm = |p: &Vector4<f64>, v: &mut Vector4<f64>| {
+            let v3 = Vector3::new(v[1], v[2], v[3]).normalize();
+            let v3_norm = (
+                v[0].powf(2.0) +
+                (v[1]*p[1]).powf(2.0) +
+                (v[2]*p[1]*p[2].sin()).powf(2.0)
+            ).sqrt();
+            let v3 = v3/v3_norm;
+
+            v[1] = v3[0];
+            v[2] = v3[1];
+            v[3] = v3[2];
+
             v[0] = ((
                 g(1,1)(&p)*v[1].powf(2.0) + 
                 g(2,2)(&p)*v[2].powf(2.0) + 
@@ -331,8 +345,16 @@ impl Environment for SchwarzschildRaytracing {
                 break Color::RGB(0x00, 0x00, 0x00)
             }
 
+                
+            fn sph_to_cart(d: &Vector4<f64>, p: &Vector4<f64>) -> Vector3<f64> {
+                let r_hat = Vector3::new(p[1], p[2], p[3]).normalize();
+                let phi_hat = Vector3::new(p[3].cos(), p[3].sin(), 0.0);
+                let theta_hat = phi_hat.cross(&r_hat);
+                
+                d[1]*r_hat + d[2]*theta_hat + d[3]*phi_hat
+            }
 
-            println!("pos_r: {}", pos[1]);
+            println!("pos_r: {}, dir: {}", pos[1], sph_to_cart(&dir, &pos));
             // Update dir
             last_dir = dir;
             for lambda in 0..4 {
@@ -350,7 +372,7 @@ impl Environment for SchwarzschildRaytracing {
             if g(0,0)(&pos).abs() < 0.00001 {
                 return Color::RGB(0xff, 0x00, 0xff);
             }
-            //time_norm(&pos ,&mut dir);
+            time_norm(&pos ,&mut dir);
 
             // Update pos
             last_pos = pos;
