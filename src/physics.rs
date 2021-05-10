@@ -1,5 +1,75 @@
 use sdl2::pixels::Color;
 
+use nalgebra as na;
+use na::{Vector4};
+
+pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
+    if mu != nu {
+        |pos: &Vector4<f64>| {
+            0.0
+        }
+    } else {
+        [
+            |pos: &Vector4<f64>| {
+                -(1.0 - 1.0/pos[1])
+            },
+            |pos: &Vector4<f64>| {
+                1.0/(1.0 - 1.0/pos[1])
+            },
+            |pos: &Vector4<f64>| {
+                pos[1].powf(2.0)
+            },
+            |pos: &Vector4<f64>| {
+                pos[1].powf(2.0) * pos[2].sin()
+            },
+        ][mu]
+    }
+}
+
+pub fn gamma(mu: usize, nu: usize, lambda: usize) -> impl Fn(&Vector4<f64>) -> f64 {
+    // Symetry
+    let (mu, nu) = if mu > nu {
+        (nu, mu)
+    } else {
+        (mu, nu)
+    };
+
+    let zero = |pos: &Vector4<f64>| {
+        0.0
+    };
+
+    let inv_r = |pos: &Vector4<f64>| {
+        1.0/pos[1]
+    };
+
+    let weird = |pos: &Vector4<f64>| {
+        -1.0/(2.0*pos[1]*(pos[1]-1.0))
+    };
+
+    match (lambda, mu, nu) {
+        (0, 0, 1) => weird,
+        (1, 0, 0) => |pos: &Vector4<f64>|{
+            (pos[1] - 1.0)/(2.0*pos[1].powf(3.0))
+        },
+        (1, 1, 1) => weird,
+        (1, 2, 2) => |pos: &Vector4<f64>|{
+            -(pos[1] - 1.0)
+        },
+        (1, 3, 3) => |pos: &Vector4<f64>|{
+            -(pos[1] - 1.0)*pos[2].sin().powf(2.0)    
+        },
+        (2, 1, 2) => inv_r,
+        (2, 3, 3) => |pos: &Vector4<f64>|{
+            -pos[2].sin()*pos[2].cos()
+        },
+        (3, 1, 3) => inv_r,
+        (3, 2, 3) => |pos: &Vector4<f64>|{
+            pos[2].tan()
+        },
+        _ => zero,
+    }
+}
+
 pub fn get_accretion_disk_color((r, _theta, _phi): (f64, f64, f64)) -> Color {
     let temperature = 7e3 * r.powf(-3.0/4.0);
     

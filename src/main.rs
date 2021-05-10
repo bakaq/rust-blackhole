@@ -15,7 +15,7 @@ mod env;
 mod physics;
 
 use render::Renderer;
-use env::{EuclidianRaytracing};
+use env::{EuclidianRaytracing, SchwarzschildRaytracing};
 
 
 fn main() {
@@ -82,6 +82,9 @@ fn main() {
         EuclidianRaytracing::new_orbiting_spherical(
             (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone())
     };
+
+    let env = SchwarzschildRaytracing::new_orbiting_spherical(
+        (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone());
 
     // Renderer
     let mut renderer = render::RayonRenderer::new(screen, env);
