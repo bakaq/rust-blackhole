@@ -75,22 +75,32 @@ fn main() {
     // Environment
     let r = 10.0;
     let mut phi = 0.0;
-    let env = EuclidianRaytracing::new_orbiting_spherical(
-            (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone());
+    let env = if spinning == 0.0 {
+        EuclidianRaytracing::new_orbiting_spherical(
+            (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone())
+    } else{
+        EuclidianRaytracing::new_orbiting_spherical(
+            (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone())
+    };
 
     // Renderer
     let mut renderer = render::RayonRenderer::new(screen, env);
     renderer.start_render();
 
+    // Mouse state
+    let mut last_mouse_pos: Option<(i32, i32)> = None;
+
     // Main loop
     let mut event_pump = sdl.event_pump().unwrap();
     'main: loop {
+        // Events
         for event in event_pump.poll_iter() {
             match event {
                 sdl2::event::Event::Quit {..} => break 'main,
                 _ => (),
             }
         }
+        
         
         canvas.set_draw_color(Color::RGB(0x00, 0x00, 0x10));
         canvas.clear();
@@ -114,6 +124,50 @@ fn main() {
                 phi,
             ));
             renderer.start_render()
+        } else {
+            // Mouse orbiting
+            if event_pump.mouse_state().left() {
+                match last_mouse_pos {
+                    Some(last_pos) => {
+                        let pos = (event_pump.mouse_state().x(), event_pump.mouse_state().y());
+
+                        let (dx, dy) =  (pos.0 - last_pos.0, pos.1 - last_pos.1);
+
+                        last_mouse_pos = Some(pos);
+
+                        if (dx, dy) != (0, 0) {
+                            let pos = renderer.env.pos;
+                            let mut pos = (
+                                pos.norm(),
+                                (pos.x.powf(2.0) + pos.y.powf(2.0)).sqrt().atan2(pos.z),
+                                pos.y.atan2(pos.x),
+                            );
+                            
+                            if pos.1 < 0.0 {
+                                pos.1 += std::f64::consts::TAU;
+                            }
+                            
+                            if pos.2 < 0.0 {
+                                pos.2 += std::f64::consts::TAU;
+                            }
+
+                            let new_pos = (
+                                pos.0,
+                                pos.1 - (dy as f64)/(std::f64::consts::PI*100.0),
+                                pos.2 - (dx as f64)/(std::f64::consts::TAU*100.0),
+                            );
+
+                            renderer.env.set_pos_orbiting(new_pos);
+                            renderer.start_render();
+                        }
+                    },
+                    None => {
+                        last_mouse_pos = Some((event_pump.mouse_state().x(), event_pump.mouse_state().y()));
+                    },
+                }
+            } else {
+                last_mouse_pos = None;
+            }
         }
 
         canvas.present();
