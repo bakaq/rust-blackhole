@@ -4,9 +4,10 @@ use image;
 use image::Pixel;
 
 use nalgebra as na;
-use na::{Vector3, Unit};
+use na::{Vector3, Vector4, Unit};
 
 use crate::physics;
+use physics::{g, gamma};
 
 pub trait Environment: Clone + Send + Sync + 'static {
     fn raytrace(&self, canvas_pos: (f64,f64)) -> Color;
@@ -38,8 +39,7 @@ pub struct EuclidianRaytracing {
 }
 
 impl EuclidianRaytracing {
-    pub fn new(pos: Vector3<f64>, dir: Vector3<f64>, up:Vector3<f64>, near: f64, fovy: f64, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> EuclidianRaytracing {
-        let up = Unit::new_normalize((dir.cross(&up)).cross(&dir));
+    pub fn new(pos: Vector3<f64>, dir: Vector3<f64>, up:Vector3<f64>, near: f64, fovy: f64, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> EuclidianRaytracing { let up = Unit::new_normalize((dir.cross(&up)).cross(&dir));
         let dir = Unit::new_normalize(dir);
         EuclidianRaytracing {pos, dir, up, near, fovy, aspect, skydome}
     }
@@ -200,6 +200,162 @@ impl Environment for EuclidianRaytracing {
                         Color::RGB(0x00, 0x00, 0xff)
                     }
                 },
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SchwarzschildRaytracing {
+    pub pos: Vector3<f64>,
+    pub dir: Unit<Vector3<f64>>,
+    pub up: Unit<Vector3<f64>>,
+    near: f64,
+    fovy: f64,
+    aspect: f64, // x/y
+    skydome: Option<Box<image::RgbImage>>,
+}
+
+impl SchwarzschildRaytracing {
+    pub fn new(pos: Vector3<f64>, dir: Vector3<f64>, up:Vector3<f64>, near: f64, fovy: f64, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> SchwarzschildRaytracing { let up = Unit::new_normalize((dir.cross(&up)).cross(&dir));
+        let dir = Unit::new_normalize(dir);
+        SchwarzschildRaytracing {pos, dir, up, near, fovy, aspect, skydome}
+    }
+
+    pub fn new_orbiting(pos: Vector3<f64>, aspect: f64, skydome: Option<Box<image::RgbImage>>) -> SchwarzschildRaytracing {
+        SchwarzschildRaytracing::new(
+            pos,
+            -pos,
+            *Vector3::z_axis(),
+            0.1,
+            std::f64::consts::PI/2.0,
+            aspect,
+            skydome,
+        )
+    }
+
+    pub fn new_orbiting_spherical((r, theta, phi): (f64, f64, f64), aspect: f64, skydome: Option<Box<image::RgbImage>>) -> SchwarzschildRaytracing{
+        let pos = Vector3::new(
+            r * theta.sin() * phi.cos(),
+            r * theta.sin() * phi.sin(),
+            r * theta.cos(),
+        );
+        
+        SchwarzschildRaytracing::new_orbiting(pos, aspect, skydome)
+    }
+    
+    pub fn set_pos_orbiting(&mut self, (r, theta, phi): (f64, f64, f64)) {
+        let pos = Vector3::new(
+            r * theta.sin() * phi.cos(),
+            r * theta.sin() * phi.sin(),
+            r * theta.cos(),
+        );
+        
+        self.pos = pos;
+
+        let dir = -pos;
+
+        self.up = Unit::new_normalize((dir.cross(Vector3::z_axis().as_ref())).cross(&dir));
+        self.dir = Unit::new_normalize(dir);
+    }
+}
+
+impl Environment for SchwarzschildRaytracing {
+    fn raytrace(&self, (canvas_x, canvas_y): (f64,f64)) -> Color {
+        // Find direction
+        let ys = (self.fovy/2.0).tan() * self.near;
+        let canvas_orig = &self.pos + self.near * self.dir.as_ref();
+        let dv = self.up.as_ref() * (canvas_y * ys/2.0) + self.dir.cross(self.up.as_ref()) * (canvas_x * ys * self.aspect/2.0);
+        let pixel_pos = &canvas_orig + &dv;
+        let dir = (&pixel_pos - &self.pos).normalize();
+    
+        // Convert coords
+        let mut pos = Vector4::new(
+            0.0, // t
+            self.pos.norm(), // r
+            (self.pos.x.powf(2.0) + self.pos.y.powf(2.0)).sqrt().atan2(self.pos.z),
+            self.pos.y.atan2(self.pos.x),
+        );
+
+        let r_hat = Vector3::new(pos[1], pos[2], pos[3]).normalize();
+        let phi_hat = Vector3::new(pos[3].cos(), pos[3].sin(), 0.0);
+        let theta_hat = phi_hat.cross(&r_hat);
+        
+        let mut dir = Vector4::new(
+            0.0,
+            self.dir.dot(&r_hat), // r
+            self.dir.dot(&theta_hat),
+            self.dir.dot(&phi_hat)
+        );
+
+        // Find time component
+        let time_norm = |p: &Vector4<f64>, v: &mut Vector4<f64>| {
+            v[0] = ((
+                g(1,1)(&p)*v[1].powf(2.0) + 
+                g(2,2)(&p)*v[2].powf(2.0) + 
+                g(3,3)(&p)*v[3].powf(2.0)
+            )/(-g(0,0)(&p))).sqrt()
+        };
+
+        time_norm(&pos, &mut dir);
+
+
+        // Integrate
+        let mut last_pos = pos;
+        let mut last_dir = dir;
+        last_dir[1] *= -1.0;
+
+        fn vec_diff(v1: Vector4<f64>, v2: Vector4<f64>) -> f64 {
+            let v1 = Vector3::new(v1[1], v1[2], v1[3]);
+            let v2 = Vector3::new(v2[1], v2[2], v2[3]);
+            
+            (v2 - v1).norm()
+        }
+
+        let dt = 0.001;
+        loop {
+            for lambda in 0..4 {
+                if pos[lambda].is_nan() || dir[lambda].is_nan() {
+                    return Color::RGB(0xff, 0x00, 0x00)
+                }
+            }
+
+            // Out to infinity
+            if dir[1] > 0.0 && vec_diff(dir, last_dir) > 0.1 {
+                // TODO: skydome
+                //println!("pos: {}, dir: {}", pos, dir);
+                break Color::RGB(0x00, 0xff, 0xff)
+            }
+            // Event horizon
+            if pos[1] < 1.01 {
+                break Color::RGB(0x00, 0x00, 0x00)
+            }
+
+
+            println!("pos_r: {}", pos[1]);
+            // Update dir
+            last_dir = dir;
+            for lambda in 0..4 {
+                for mu in 0..4 {
+                    for nu in 0..4 {
+                        dir[lambda] -= gamma(lambda, mu, nu)(&pos)*dir[mu]*dir[nu]*dt
+                    }
+                }
+            }
+
+            if g(0,0)(&pos).is_nan() {
+                return Color::RGB(0x00, 0x00, 0xff); 
+            }
+
+            if g(0,0)(&pos).abs() < 0.00001 {
+                return Color::RGB(0xff, 0x00, 0xff);
+            }
+            //time_norm(&pos ,&mut dir);
+
+            // Update pos
+            last_pos = pos;
+            for lambda in 0..4 {
+                pos[lambda] += dir[lambda]*dt;
             }
         }
     }
