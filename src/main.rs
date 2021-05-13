@@ -9,14 +9,44 @@ use sdl2;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 
+use nalgebra::{Unit, Vector3};
+
 
 mod render;
 mod env;
 mod physics;
 
 use render::Renderer;
-use env::{EuclidianRaytracing, SchwarzschildRaytracing};
+use env::{EuclidianRaytracing, SchwarzschildRaytracing, Environment};
 
+#[derive(Clone)]
+enum Env {
+    Euclid(EuclidianRaytracing),
+    Schwarz(SchwarzschildRaytracing),
+}
+
+impl Environment for Env {
+    fn raytrace(&self, coords: (f64, f64)) -> Color {
+        match self {
+            Self::Euclid(euclid) => euclid.raytrace(coords),
+            Self::Schwarz(schwarz) => schwarz.raytrace(coords),
+        }
+    }
+    
+    fn get_data(&self) -> (Vector3<f64>, Unit<Vector3<f64>>, Unit<Vector3<f64>>){
+        match self {
+            Self::Euclid(a) => a.get_data(),
+            Self::Schwarz(a) => a.get_data(),
+        }
+    }
+
+    fn set_data(&mut self, pos: &Vector3<f64>, dir: &Vector3<f64>, up: &Vector3<f64>) {
+        match self{
+            Self::Euclid(a) => a.set_data(&pos, &dir, &up),
+            Self::Schwarz(a) => a.set_data(&pos, &dir, &up),
+        }
+    }
+}
 
 fn main() {
     // == Deal with CLI arguments ==
@@ -38,10 +68,9 @@ fn main() {
     };
 
     let aspect = screen[0] as f64 / screen[1] as f64;
-    println!("{}", aspect);
 
     // Parameters
-    let spinning: f64 = matches.value_of("spinning").unwrap_or("0").parse().unwrap();
+    let schwarzschild: bool = matches.is_present("schwarzschild");
     
     let skydome = match matches.value_of("skydome") {
         Some(path) => {
@@ -72,22 +101,20 @@ fn main() {
     canvas.clear();
     canvas.present();
 
-    // Environment
+    // Enverer
     let r = 10.0;
     let mut phi = 0.0;
-    let env = if spinning == 0.0 {
-        EuclidianRaytracing::new_orbiting_spherical(
-            (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone())
-    } else{
-        EuclidianRaytracing::new_orbiting_spherical(
-            (r, std::f64::consts::FRAC_PI_2, phi), aspect, skydome.clone())
-    };
-
-    let env = SchwarzschildRaytracing::new_orbiting_spherical(
-        (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone());
-
-    // Renderer
-    let mut renderer = render::RayonRenderer::new(screen, env);
+    
+    let mut renderer = render::RayonRenderer::new(screen,
+        if schwarzschild {
+            Env::Schwarz(SchwarzschildRaytracing::new_orbiting_spherical(
+                (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone()))
+        } else {
+            Env::Euclid(EuclidianRaytracing::new_orbiting_spherical(
+                (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone()))
+        },
+    );
+    
     renderer.start_render();
 
     // Mouse state
@@ -108,7 +135,7 @@ fn main() {
         canvas.set_draw_color(Color::RGB(0x00, 0x00, 0x10));
         canvas.clear();
         
-        // Rendering
+        // Envering
         let pixels = renderer.get_pixels();
         for ii in 0..pixels.len() {
             let ii = ii as u32;
@@ -119,58 +146,49 @@ fn main() {
             canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
         }
    
-        if spinning != 0.0 && renderer.is_ready() {
-            phi += spinning;
-            renderer.env.set_pos_orbiting((
-                r,
-                (1.0 + 0.5*(phi*4.0).sin())*std::f64::consts::FRAC_PI_2,
-                phi,
-            ));
-            renderer.start_render()
-        } else {
-            // Mouse orbiting
-            if event_pump.mouse_state().left() {
-                match last_mouse_pos {
-                    Some(last_pos) => {
-                        let pos = (event_pump.mouse_state().x(), event_pump.mouse_state().y());
+        // Mouse orbiting
+        if event_pump.mouse_state().left() {
+            match last_mouse_pos {
+                Some(last_pos) => {
+                    let pos = (event_pump.mouse_state().x(), event_pump.mouse_state().y());
 
-                        let (dx, dy) =  (pos.0 - last_pos.0, pos.1 - last_pos.1);
+                    let (dx, dy) =  (pos.0 - last_pos.0, pos.1 - last_pos.1);
 
-                        last_mouse_pos = Some(pos);
+                    last_mouse_pos = Some(pos);
 
-                        if (dx, dy) != (0, 0) {
-                            let pos = renderer.env.pos;
-                            let mut pos = (
-                                pos.norm(),
-                                (pos.x.powf(2.0) + pos.y.powf(2.0)).sqrt().atan2(pos.z),
-                                pos.y.atan2(pos.x),
-                            );
-                            
-                            if pos.1 < 0.0 {
-                                pos.1 += std::f64::consts::TAU;
-                            }
-                            
-                            if pos.2 < 0.0 {
-                                pos.2 += std::f64::consts::TAU;
-                            }
+                    if (dx, dy) != (0, 0) {
+                        let pos = renderer.env.pos();
 
-                            let new_pos = (
-                                pos.0,
-                                pos.1 - (dy as f64)/(std::f64::consts::PI*100.0),
-                                pos.2 - (dx as f64)/(std::f64::consts::TAU*100.0),
-                            );
-
-                            renderer.env.set_pos_orbiting(new_pos);
-                            renderer.start_render();
+                        let mut pos = (
+                            pos.norm(),
+                            (pos.x.powf(2.0) + pos.y.powf(2.0)).sqrt().atan2(pos.z),
+                            pos.y.atan2(pos.x),
+                        );
+                        
+                        if pos.1 < 0.0 {
+                            pos.1 += std::f64::consts::TAU;
                         }
-                    },
-                    None => {
-                        last_mouse_pos = Some((event_pump.mouse_state().x(), event_pump.mouse_state().y()));
-                    },
-                }
-            } else {
-                last_mouse_pos = None;
+                        
+                        if pos.2 < 0.0 {
+                            pos.2 += std::f64::consts::TAU;
+                        }
+
+                        let new_pos = Vector3::new(
+                            pos.0,
+                            pos.1 - (dy as f64)/(std::f64::consts::PI*100.0),
+                            pos.2 - (dx as f64)/(std::f64::consts::TAU*100.0),
+                        );
+                        
+                        renderer.env.set_pos_orbiting(&new_pos);
+                        renderer.start_render();
+                    }
+                },
+                None => {
+                    last_mouse_pos = Some((event_pump.mouse_state().x(), event_pump.mouse_state().y()));
+                },
             }
+        } else {
+            last_mouse_pos = None;
         }
 
         canvas.present();
