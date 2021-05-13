@@ -1,14 +1,14 @@
 use sdl2::pixels::Color;
 
 use nalgebra as na;
-use na::{Vector4};
+use na::{Vector3, Vector4};
 
 #[cfg(test)]
 mod tests;
 
 pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
     if mu != nu {
-        |pos: &Vector4<f64>| {
+        |_pos: &Vector4<f64>| {
             0.0
         }
     } else {
@@ -37,7 +37,7 @@ pub fn gamma(lambda: usize, mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f
         (mu, nu)
     };
 
-    let zero = |pos: &Vector4<f64>| {
+    let zero = |_pos: &Vector4<f64>| {
         0.0
     };
 
@@ -118,4 +118,58 @@ pub fn get_accretion_disk_color((r, _theta, _phi): (f64, f64, f64)) -> Color {
     );
     
     Color::RGB(r as u8, g as u8, b as u8)
+}
+
+pub fn time_norm(p: &Vector4<f64>, v: &mut Vector4<f64>) {
+    let v3 = Vector3::new(v[1], v[2], v[3]).normalize();
+    let v3_norm = (
+        v[0].powf(2.0) +
+        (v[1]*p[1]).powf(2.0) +
+        (v[2]*p[1]*p[2].sin()).powf(2.0)
+    ).sqrt();
+    let v3 = v3/v3_norm;
+
+    v[1] = v3[0];
+    v[2] = v3[1];
+    v[3] = v3[2];
+
+    v[0] = ((
+        g(1,1)(&p)*v[1].powf(2.0) + 
+        g(2,2)(&p)*v[2].powf(2.0) + 
+        g(3,3)(&p)*v[3].powf(2.0)
+    )/(-g(0,0)(&p))).sqrt();
+}
+
+pub fn vec4to3(v: &Vector4<f64>) -> Vector3<f64> {
+    Vector3::new(v[1], v[2], v[3])
+}
+
+pub fn vec3to4(v: &Vector3<f64>) -> Vector4<f64> {
+    Vector4::new(0.0, v[0], v[1], v[2])
+}
+
+pub fn cart2sph(v: &Vector3<f64>) -> Vector3<f64> {
+    let mut v = Vector3::new(
+        v.norm(),
+        (v.x.powf(2.0) + v.y.powf(2.0)).sqrt().atan2(v.z),
+        v.y.atan2(v.x),
+    );
+
+    if v[1] < 0.0 {
+        v[1] += std::f64::consts::TAU;
+    }
+    
+    if v[2] < 0.0 {
+        v[1] += std::f64::consts::TAU;
+    }
+    
+    v
+}
+
+pub fn sph2cart(v: &Vector3<f64>) -> Vector3<f64> {
+    Vector3::new(
+       v[0] * v[1].sin() * v[2].cos(),
+       v[0] * v[1].sin() * v[2].sin(),
+       v[0] * v[1].cos(),
+    )
 }
