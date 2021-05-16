@@ -3,8 +3,6 @@ use sdl2::pixels::Color;
 use nalgebra as na;
 use na::{Vector3, Vector4};
 
-#[cfg(test)]
-mod tests;
 
 pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
     if mu != nu {
@@ -44,22 +42,22 @@ pub fn gamma(lambda: usize, mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f
     let inv_r = |pos: &Vector4<f64>| {
         1.0/pos[1]
     };
-
-    let weird = |pos: &Vector4<f64>| {
-        -1.0/(2.0*pos[1]*(pos[1]-1.0))
-    };
-
+    
     match (lambda, mu, nu) {
-        (0, 0, 1) => weird,
+        (0, 0, 1) => |pos: &Vector4<f64>| {
+            1.0/(2.0*pos[1]*(pos[1]-1.0))
+        },
         (1, 0, 0) => |pos: &Vector4<f64>|{
             (pos[1] - 1.0)/(2.0*pos[1].powf(3.0))
         },
-        (1, 1, 1) => weird,
+        (1, 1, 1) => |pos: &Vector4<f64>| {
+            -1.0/(2.0*pos[1]*(pos[1]-1.0))
+        },
         (1, 2, 2) => |pos: &Vector4<f64>|{
-            -(pos[1] - 1.0)
+            1.0 - pos[1]
         },
         (1, 3, 3) => |pos: &Vector4<f64>|{
-            -(pos[1] - 1.0)*pos[2].sin().powf(2.0)    
+            (1.0 - pos[1])*pos[2].sin().powf(2.0)    
         },
         (2, 1, 2) => inv_r,
         (2, 3, 3) => |pos: &Vector4<f64>|{
@@ -67,7 +65,7 @@ pub fn gamma(lambda: usize, mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f
         },
         (3, 1, 3) => inv_r,
         (3, 2, 3) => |pos: &Vector4<f64>|{
-            pos[2].tan()
+            1.0/pos[2].tan()
         },
         _ => zero,
     }
@@ -172,4 +170,103 @@ pub fn sph2cart(v: &Vector3<f64>) -> Vector3<f64> {
        v[0] * v[1].sin() * v[2].sin(),
        v[0] * v[1].cos(),
     )
+}
+
+pub fn cart2sph_at(p: &Vector3<f64>, v: &Vector3<f64>) -> Vector3<f64> {
+    let r_hat = Vector3::new(p[0], p[1], p[2]).normalize();
+    let phi_hat = Vector3::new(-p[2].sin(), p[2].cos(), 0.0);
+    let theta_hat = phi_hat.cross(&r_hat);
+    
+    Vector3::new(
+        v.dot(&r_hat), // r
+        v.dot(&theta_hat),
+        v.dot(&phi_hat)
+    ) 
+}
+
+/*
+pub fn sph2cart_at(p: &Vector3<f64>, v: &Vector3<f64>) {
+    Vector3::new(
+        
+    )
+}
+*/
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rand::prelude::*;
+    use nalgebra as na;
+
+    #[test]
+    fn g_is_digonal() {
+        let pos = na::Vector4::<f64>::new(random(), random(), random(), random());
+        let pos = pos + na::Vector4::new(0.0, 1.01, 0.0, 0.0);
+
+        for mu in 0..4 {
+            for nu in 0..4 {
+                if mu == nu {
+                    continue;
+                }
+
+                assert_eq!(g(mu, nu)(&pos), 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn gamma_is_symetric() {
+        let pos = na::Vector4::<f64>::new(random(), random(), random(), random());
+        let pos = 100.0 * pos + na::Vector4::new(0.0, 1.01, 0.0, 0.0);
+
+        for lambda in 0..4 {
+            for mu in 0..4 {
+                for nu in 0..4 {
+                    assert_eq!(
+                        gamma(lambda, mu, nu)(&pos),
+                        gamma(lambda, nu, mu)(&pos), 
+                        "Failed at {:?}",
+                        (lambda, mu, nu)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn time_norm_makes_proper_time_zero() {
+        let pos = na::Vector4::<f64>::new(random(), random(), random(), random());
+        let pos = 100.0 * pos + na::Vector4::new(0.0, 1.01, 0.0, 0.0);
+        
+        let v = na::Vector4::new(0.0, random(), random(), random());
+        let mut v = 100.0 * v;
+
+        time_norm(&pos, &mut v);
+
+        let mut s = 0.0;
+        for mu in 0..4 {
+            for nu in 0..4 {
+                s += g(mu, nu)(&pos) * v[mu] * v[nu];
+            }
+        }
+        assert!(s < 0.01);
+    }
+
+    #[test]
+    fn vec3to4_and_vec4to3_are_inverses() {
+        let v3 = na::Vector3::<f64>::new(random(), random(), random());
+        let v3_new = vec4to3(&vec3to4(&v3));
+        
+        for i in 0..3 {
+            assert!(v3_new[i] - v3[i] < 0.0001);
+        }
+        
+        let v4 = na::Vector4::<f64>::new(random(), random(), random(), random());
+        let v4_new = vec3to4(&vec4to3(&v4));
+        
+        for i in 0..4 {
+            assert!(v4_new[i] - v4[i] < 0.0001);
+        }
+    }
 }

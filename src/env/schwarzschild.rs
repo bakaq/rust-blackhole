@@ -46,21 +46,6 @@ impl SchwarzschildRaytracing {
         
         SchwarzschildRaytracing::new_orbiting(pos, aspect, skydome)
     }
-    
-    pub fn set_pos_orbiting(&mut self, (r, theta, phi): (f64, f64, f64)) {
-        let pos = Vector3::new(
-            r * theta.sin() * phi.cos(),
-            r * theta.sin() * phi.sin(),
-            r * theta.cos(),
-        );
-        
-        self.pos = pos;
-
-        let dir = -pos;
-
-        self.up = Unit::new_normalize((dir.cross(Vector3::z_axis().as_ref())).cross(&dir));
-        self.dir = Unit::new_normalize(dir);
-    }
 }
 
 impl Environment for SchwarzschildRaytracing {
@@ -75,24 +60,19 @@ impl Environment for SchwarzschildRaytracing {
         // Convert coords
         let mut pos = vec3to4(&cart2sph(&self.pos));
 
-        let r_hat = Vector3::new(pos[1], pos[2], pos[3]).normalize();
-        let phi_hat = Vector3::new(pos[3].cos(), pos[3].sin(), 0.0);
-        let theta_hat = phi_hat.cross(&r_hat);
-        
-        let mut dir = Vector4::new(
-            0.0,
-            dir.dot(&r_hat), // r
-            dir.dot(&theta_hat),
-            dir.dot(&phi_hat)
-        ); 
+        let mut dir = vec3to4(&cart2sph_at(&vec4to3(&pos), &dir));
+
         time_norm(&pos, &mut dir);
 
+        println!("dir: {}", vec4to3(&dir));
 
         // Integrate
         let mut _last_pos = pos;
         let mut last_dir = dir;
         last_dir[1] *= -1.0;
 
+        // This function is wrong
+        // TODO: rewrite
         fn vec_diff(v1: Vector4<f64>, v2: Vector4<f64>) -> f64 {
             let v1 = sph2cart(&vec4to3(&v1));
             let v2 = sph2cart(&vec4to3(&v2));
@@ -120,15 +100,6 @@ impl Environment for SchwarzschildRaytracing {
             }
 
                 
-            fn sph_to_cart(d: &Vector4<f64>, p: &Vector4<f64>) -> Vector3<f64> {
-                let r_hat = Vector3::new(p[1], p[2], p[3]).normalize();
-                let phi_hat = Vector3::new(p[3].cos(), p[3].sin(), 0.0);
-                let theta_hat = phi_hat.cross(&r_hat);
-                
-                d[1]*r_hat + d[2]*theta_hat + d[3]*phi_hat
-            }
-
-            println!("pos_r: {}, dir: {}", pos[1], sph_to_cart(&dir, &pos));
             // Update dir
             last_dir = dir;
             for lambda in 0..4 {

@@ -13,7 +13,7 @@ args:
         help: "Sets the size of each pixel (Default: 1)"
         takes_value: true
     - schwarzschild:
-        long: spinning
+        long: schwarzschild
         short: s
         help: "Use Schwazschild spacetime"
     - skydome:

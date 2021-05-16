@@ -49,21 +49,6 @@ impl EuclidianRaytracing {
         
         EuclidianRaytracing::new_orbiting(pos, aspect, skydome)
     }
-
-    pub fn set_pos_orbiting(&mut self, (r, theta, phi): (f64, f64, f64)) {
-        let pos = Vector3::new(
-            r * theta.sin() * phi.cos(),
-            r * theta.sin() * phi.sin(),
-            r * theta.cos(),
-        );
-        
-        self.pos = pos;
-
-        let dir = -pos;
-
-        self.up = Unit::new_normalize((dir.cross(Vector3::z_axis().as_ref())).cross(&dir));
-        self.dir = Unit::new_normalize(dir);
-    }
 }
 
 impl Environment for EuclidianRaytracing {
