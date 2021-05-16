@@ -52,17 +52,13 @@ impl EuclidianRaytracing {
 }
 
 impl Environment for EuclidianRaytracing {
-    fn raytrace(&self, (canvas_x, canvas_y): (f64,f64)) -> Color {
+    fn raytrace(&self, canvas: (f64,f64)) -> Color {
         // Sphere
         let sphere_pos = Vector3::new(0.0, 0.0, 0.0);
         let r: f64 = 1.0;
 
         // Find direction
-        let ys = (self.fovy/2.0).tan() * self.near;
-        let canvas_orig = &self.pos + self.near * self.dir.as_ref();
-        let dv = self.up.as_ref() * (canvas_y * ys/2.0) + self.dir.cross(self.up.as_ref()) * (canvas_x * ys * self.aspect/2.0);
-        let pixel_pos = &canvas_orig + &dv;
-        let dir = (&pixel_pos - &self.pos).normalize();
+        let dir = get_pixel_dir(canvas, self.fovy, self.aspect, &self.dir, &self.up);
 
         // Check accretion disk
         let mut hit = false;
@@ -105,41 +101,10 @@ impl Environment for EuclidianRaytracing {
         if hit {
             match thing {
                 0 => Color::RGB(0x00, 0x00, 0x00), // Blackhole
-                1 => {
-                    physics::get_accretion_disk_color((inter_point.norm(), 0.0, 0.0))
-                    /*
-                    let mut phi = inter_point.y.atan2(inter_point.x);
-                    if phi < 0.0 {
-                        phi += std::f64::consts::TAU;
-                    }
-
-                    if (phi*10.0/std::f64::consts::TAU).fract() < 0.5 {
-                        Color::RGB(0xff, 0x00, 0x00)
-                    } else {
-                        Color::RGB(0x00, 0x00, 0xff)
-                    }
-                    */
-                }, // Accretion disk
+                1 => physics::get_accretion_disk_color((inter_point.norm(), 0.0, 0.0)), // Accretion disk
                 _ => Color::RGB(0xff, 0xff, 0xff),
             }
             
-            /*
-            let hit_point = closest - (r.powf(2.0) - r_c2).sqrt()*&dir;
-            let normal = (&hit_point - &sphere_pos).normalize();
-            
-            let light = Vector3::new(-1.5, 1.5, -1.5).normalize();
-
-            let intensity_raw = -normal.dot(&light);
-            let intensity = if intensity_raw < 0.0 {
-                0.0
-            } else {
-                intensity_raw
-            }; 
-
-            let int_hex = (intensity * 255.0) as u8;
-
-            Color::RGB(int_hex, int_hex, int_hex)
-            */
         } else {
             let mut theta = ((dir.x.powf(2.0) + dir.y.powf(2.0)).sqrt()).atan2(dir.z);
             if theta < 0.0 {

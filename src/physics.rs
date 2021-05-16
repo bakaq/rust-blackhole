@@ -1,7 +1,7 @@
 use sdl2::pixels::Color;
 
 use nalgebra as na;
-use na::{Vector3, Vector4};
+use na::{Unit, Vector3, Vector4, Rotation3};
 
 
 pub fn g(mu: usize, nu: usize) -> impl Fn(&Vector4<f64>) -> f64 {
@@ -184,13 +184,24 @@ pub fn cart2sph_at(p: &Vector3<f64>, v: &Vector3<f64>) -> Vector3<f64> {
     ) 
 }
 
-/*
-pub fn sph2cart_at(p: &Vector3<f64>, v: &Vector3<f64>) {
-    Vector3::new(
-        
-    )
+
+pub fn sph2cart_at(p: &Vector3<f64>, v: &Vector3<f64>) -> Vector3<f64> {
+    // p in spherical coords
+    let rot = (
+        Rotation3::from_axis_angle(&Vector3::z_axis(), p[2]) *
+        Rotation3::from_axis_angle(&Vector3::y_axis(), p[1])
+    ).inverse();
+
+    rot * v
 }
-*/
+
+pub fn get_pixel_dir(canvas: (f64, f64), fovy: f64, aspect: f64, dir: &Unit<Vector3<f64>>, up: &Unit<Vector3<f64>>) -> Vector3<f64> {
+    let ys = (fovy/2.0).tan();
+    let canvas_orig = dir.as_ref();
+    let dv = dir.cross(up.as_ref()) * (canvas.0 * ys * aspect/2.0) + // x
+        up.as_ref() * (canvas.1 * ys/2.0); // y
+    (canvas_orig + &dv).normalize()
+}
 
 #[cfg(test)]
 mod tests {
