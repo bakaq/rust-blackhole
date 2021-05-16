@@ -33,7 +33,7 @@ impl SchwarzschildRaytracing {
             -pos,
             *Vector3::z_axis(),
             0.1,
-            std::f64::consts::PI/2.0,
+            std::f64::consts::PI/3.0,
             aspect,
             skydome,
         )
@@ -62,15 +62,13 @@ impl Environment for SchwarzschildRaytracing {
 
         time_norm(&pos, &mut dir);
 
-        println!("dir: {}", vec4to3(&dir));
+        //println!("dir: {}", vec4to3(&dir));
 
         // Integrate
-        let mut _last_pos = pos;
+        let mut last_pos = pos;
         let mut last_dir = dir;
         last_dir[1] *= -1.0;
 
-        // This function is wrong
-        // TODO: rewrite
         fn vec_diff(v1: &Vector4<f64>, p1: &Vector4<f64>, v2: &Vector4<f64>, p2: &Vector4<f64>) -> f64 {
             let v1 = sph2cart_at(&vec4to3(v1), &vec4to3(p1));
             let v2 = sph2cart_at(&vec4to3(v2), &vec4to3(p2));
@@ -78,7 +76,7 @@ impl Environment for SchwarzschildRaytracing {
             (v2 - v1).norm()
         }
 
-        let dt = 0.001;
+        let dt_0 = 0.0001;
         loop {
             for lambda in 0..4 {
                 if pos[lambda].is_nan() || dir[lambda].is_nan() {
@@ -87,9 +85,7 @@ impl Environment for SchwarzschildRaytracing {
             }
 
             // Out to infinity
-            if dir[1] > 0.0 && vec_diff(&dir, &pos, &last_dir, &_last_pos) > 0.1 {
-                // TODO: skydome
-                
+            if dir[1] > 0.0 && vec_diff(&dir, &pos, &last_dir, &last_pos) < 0.2 {
                 let coords = sph2cart_at(&vec4to3(&dir), &vec4to3(&pos));
                 let mut theta = (coords.x.powf(2.0) + coords.y.powf(2.0)).sqrt().atan2(coords.z);
                 let mut phi = coords.x.atan2(coords.y);
@@ -127,13 +123,14 @@ impl Environment for SchwarzschildRaytracing {
                 break Color::RGB(0x00, 0x00, 0x00);
             }
 
+            let dt = dt_0 * pos[1].powf(2.0);
                 
             // Update dir
             last_dir = dir;
             for lambda in 0..4 {
                 for mu in 0..4 {
                     for nu in 0..4 {
-                        dir[lambda] -= gamma(lambda, mu, nu)(&pos)*dir[mu]*dir[nu]*dt
+                        dir[lambda] -= gamma(lambda, mu, nu)(&pos)*dir[mu]*dir[nu]*dt;
                     }
                 }
             }
@@ -148,7 +145,7 @@ impl Environment for SchwarzschildRaytracing {
             time_norm(&pos ,&mut dir);
 
             // Update pos
-            _last_pos = pos;
+            last_pos = pos;
             for lambda in 0..4 {
                 pos[lambda] += dir[lambda]*dt;
             }
