@@ -3,22 +3,19 @@ version: "0.1.0"
 author: bakaq
 args:
     - screen:
-        short: s
         long: screen
         value_name: SCREEN
         help: "Sets the size of the render. Use like 400 for square or 400x500 (Default: 400)"
         takes_value: true
     - scale:
-        short: S
         long: scale
         value_name: SCALE
         help: "Sets the size of each pixel (Default: 1)"
         takes_value: true
-    - spinning:
-        long: spinning
-        value_name: DPHI
-        help: "Sets the spin velocity (Default: 0)"
-        takes_value: true
+    - schwarzschild:
+        long: schwarzschild
+        short: s
+        help: "Use Schwazschild spacetime"
     - skydome:
         long: skydome
         value_name: PATH
