@@ -4,8 +4,6 @@ use nalgebra::{Vector3, Unit};
 
 use crate::physics::*;
 
-#[cfg(test)]
-mod tests;
 
 mod euclid;
 pub use euclid::*;
@@ -71,5 +69,9 @@ pub trait Environment: Clone + Send + Sync + 'static {
        
         self.raytrace((x,y))
     }
+}
+
+#[cfg(test)]
+mod tests {
 
 }
