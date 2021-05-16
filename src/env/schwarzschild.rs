@@ -3,6 +3,8 @@ use sdl2::pixels::Color;
 use nalgebra as na;
 use na::{Vector3, Vector4, Unit};
 
+use image::Pixel;
+
 use crate::physics;
 use physics::*;
 
@@ -49,14 +51,10 @@ impl SchwarzschildRaytracing {
 }
 
 impl Environment for SchwarzschildRaytracing {
-    fn raytrace(&self, (canvas_x, canvas_y): (f64,f64)) -> Color {
+    fn raytrace(&self, canvas: (f64,f64)) -> Color {
         // Find direction
-        let ys = (self.fovy/2.0).tan() * self.near;
-        let canvas_orig = &self.pos + self.near * self.dir.as_ref();
-        let dv = self.up.as_ref() * (canvas_y * ys/2.0) + self.dir.cross(self.up.as_ref()) * (canvas_x * ys * self.aspect/2.0);
-        let pixel_pos = &canvas_orig + &dv;
-        let dir = (&pixel_pos - &self.pos).normalize();
-    
+        let dir = get_pixel_dir(canvas, self.fovy, self.aspect, &self.dir, &self.up);
+
         // Convert coords
         let mut pos = vec3to4(&cart2sph(&self.pos));
 
@@ -73,9 +71,9 @@ impl Environment for SchwarzschildRaytracing {
 
         // This function is wrong
         // TODO: rewrite
-        fn vec_diff(v1: Vector4<f64>, v2: Vector4<f64>) -> f64 {
-            let v1 = sph2cart(&vec4to3(&v1));
-            let v2 = sph2cart(&vec4to3(&v2));
+        fn vec_diff(v1: &Vector4<f64>, p1: &Vector4<f64>, v2: &Vector4<f64>, p2: &Vector4<f64>) -> f64 {
+            let v1 = sph2cart_at(&vec4to3(v1), &vec4to3(p1));
+            let v2 = sph2cart_at(&vec4to3(v2), &vec4to3(p2));
 
             (v2 - v1).norm()
         }
@@ -84,19 +82,49 @@ impl Environment for SchwarzschildRaytracing {
         loop {
             for lambda in 0..4 {
                 if pos[lambda].is_nan() || dir[lambda].is_nan() {
-                    return Color::RGB(0xff, 0x00, 0x00)
+                    return Color::RGB(0xff, 0x00, 0x00);
                 }
             }
 
             // Out to infinity
-            if dir[1] > 0.0 && vec_diff(dir, last_dir) > 0.1 {
+            if dir[1] > 0.0 && vec_diff(&dir, &pos, &last_dir, &_last_pos) > 0.1 {
                 // TODO: skydome
-                //println!("pos: {}, dir: {}", pos, dir);
-                break Color::RGB(0x00, 0xff, 0xff)
+                
+                let coords = sph2cart_at(&vec4to3(&dir), &vec4to3(&pos));
+                let mut theta = (coords.x.powf(2.0) + coords.y.powf(2.0)).sqrt().atan2(coords.z);
+                let mut phi = coords.x.atan2(coords.y);
+
+                if theta < 0.0 {
+                    theta += std::f64::consts::TAU;
+                }
+                if phi < 0.0 {
+                    phi += std::f64::consts::TAU;
+                }
+
+                match &self.skydome {
+                    Some(skydome) => {
+                        let (w, h) = skydome.dimensions();
+                        
+                        let x = (phi / std::f64::consts::TAU * (w as f64)) as u32;
+                        let y = (theta / std::f64::consts::PI * (h as f64)) as u32;
+
+                        let pixel = skydome.get_pixel(x, y).channels();
+                        break Color::RGB(pixel[0], pixel[1], pixel[2]);
+                    },
+                    None => {
+                        if ((phi / std::f64::consts::TAU * 100.0).fract() < 0.25)
+                         || ((theta / std::f64::consts::PI * 50.0).fract() < 0.25) {
+                            break Color::RGB(0xff, 0x00, 0x00);
+                        } else {
+                            break Color::RGB(0x00, 0x00, 0xff);
+                        }
+                    },
+                }
             }
+
             // Event horizon
             if pos[1] < 1.01 {
-                break Color::RGB(0x00, 0x00, 0x00)
+                break Color::RGB(0x00, 0x00, 0x00);
             }
 
                 
