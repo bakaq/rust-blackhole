@@ -38,5 +38,9 @@ fn main() {
         None => None,
     };
 
-    start_windowed(screen, scale, aspect, schwarzschild, skydome);
+    let r: f64 = matches.value_of("cam-r").unwrap_or("10.0").parse().unwrap();
+    let theta: f64 = matches.value_of("cam-theta").unwrap_or("asdf").parse().unwrap_or(std::f64::consts::FRAC_PI_2 - 0.2);
+    let phi: f64 = matches.value_of("cam-phi").unwrap_or("0.0").parse().unwrap();
+
+    start_windowed(screen, scale, aspect, schwarzschild, skydome, (r, theta, phi));
 }
