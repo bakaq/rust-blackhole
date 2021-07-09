@@ -3,6 +3,7 @@ use std::time::{Duration};
 
 
 use image;
+use image::RgbImage;
 
 use sdl2;
 use sdl2::pixels::Color;
@@ -73,7 +74,7 @@ pub fn start_windowed(screen: [u32;2], scale: u32, aspect: f64, schwarzschild: b
         canvas.set_draw_color(Color::RGB(0x00, 0x00, 0x10));
         canvas.clear();
         
-        // Envering
+        // Rendering
         let pixels = renderer.get_pixels();
         for ii in 0..pixels.len() {
             let ii = ii as u32;
@@ -132,6 +133,46 @@ pub fn start_windowed(screen: [u32;2], scale: u32, aspect: f64, schwarzschild: b
         canvas.present();
         thread::sleep(Duration::new(0, (1e9 as u32) / 60));
     }
+}
+
+pub fn render_image(screen: [u32;2], aspect: f64, schwarzschild: bool, skydome: Option<Box<image::RgbImage>>, (r, theta, phi): (f64, f64, f64), path: &str) {
+    let mut renderer = render::RayonRenderer::new(screen,
+        if schwarzschild {
+            Env::Schwarz(SchwarzschildRaytracing::new_orbiting_spherical(
+                (r, theta, phi), aspect, skydome.clone()))
+        } else {
+            Env::Euclid(EuclidianRaytracing::new_orbiting_spherical(
+                (r, theta, phi), aspect, skydome.clone()))
+        },
+    );
+    
+    renderer.start_render();
+
+    // Creates an image
+    let mut img = RgbImage::new(screen[0], screen[1]);
+    
+    // Rendering
+    while !renderer.is_ready() {
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let pixels = renderer.get_pixels();
+
+    for ii in 0..pixels.len() {
+        let ii = ii as u32;
+        let i = ii / screen[0];
+        let j = ii % screen[0];
+        
+        //canvas.set_draw_color(pixels[ii as usize]);
+        let pixel = pixels[ii as usize];
+        let pixel: image::Rgb<u8> = [pixel.r, pixel.g, pixel.b].into();
+
+        img[(j, i)] = pixel;
+        //canvas.fill_rect(Rect::new(j as i32, i as i32, scale, scale)).unwrap();
+    }
+
+    img.save(path).unwrap();
+    println!("Written image")
 }
 
 #[derive(Clone)]

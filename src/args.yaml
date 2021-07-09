@@ -25,6 +25,7 @@ args:
         long: image
         short: i
         help: "Renders to an image"
+        takes_value: true
     - cam-r:
         long: cam-r
         help: "Sets the radial coordinate of the camera"
