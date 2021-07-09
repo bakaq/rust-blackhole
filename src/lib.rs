@@ -18,7 +18,7 @@ mod physics;
 use render::Renderer;
 use env::{EuclidianRaytracing, SchwarzschildRaytracing, Environment};
 
-pub fn start_windowed(screen: [u32;2], scale: u32, aspect: f64, schwarzschild: bool, skydome: Option<Box<image::RgbImage>>) {
+pub fn start_windowed(screen: [u32;2], scale: u32, aspect: f64, schwarzschild: bool, skydome: Option<Box<image::RgbImage>>, (r, theta, phi): (f64, f64, f64)) {
     // SDL2 stuff
     let sdl = sdl2::init().unwrap();
     let video = sdl.video().unwrap();
@@ -37,16 +37,19 @@ pub fn start_windowed(screen: [u32;2], scale: u32, aspect: f64, schwarzschild: b
     canvas.present();
 
     // Renderer
+    /*
     let r = 10.0;
-    let phi = 0.0;
-    
+    let theta = std::f64::consts::FRAC_PI_2 - 0.2;
+    let phi = 0.0; 
+    */
+
     let mut renderer = render::RayonRenderer::new(screen,
         if schwarzschild {
             Env::Schwarz(SchwarzschildRaytracing::new_orbiting_spherical(
-                (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone()))
+                (r, theta, phi), aspect, skydome.clone()))
         } else {
             Env::Euclid(EuclidianRaytracing::new_orbiting_spherical(
-                (r, std::f64::consts::FRAC_PI_2 - 0.2, phi), aspect, skydome.clone()))
+                (r, theta, phi), aspect, skydome.clone()))
         },
     );
     

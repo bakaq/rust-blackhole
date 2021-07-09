@@ -21,3 +21,19 @@ args:
         value_name: PATH
         help: "Sets the path to the skydome"
         takes_value: true
+    - image:
+        long: image
+        short: i
+        help: "Renders to an image"
+    - cam-r:
+        long: cam-r
+        help: "Sets the radial coordinate of the camera"
+        takes_value: true
+    - cam-theta:
+        long: cam-theta
+        help: "Sets the theta coordinate of the camera"
+        takes_value: true
+    - cam-phi:
+        long: cam-phi
+        help: "Sets the phi coordinate of the camera"
+        takes_value: true
